@@ -3,7 +3,7 @@ POST https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/pages
 Content-Type: application/json
 
 {
-  "id": "test-page-2",
+  "id": "test-page-1",
   "title": "Test Page",
   "isPublished": true
 }
