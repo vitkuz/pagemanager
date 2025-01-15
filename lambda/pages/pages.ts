@@ -1,5 +1,5 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, DeleteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand, DeleteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 
 const dynamodb = new DynamoDBClient({});
@@ -63,23 +63,22 @@ async function getPage(id: string): Promise<APIGatewayProxyResult> {
 
   return {
     statusCode: 200,
-    body: JSON.stringify(result.Item)
+    body: JSON.stringify(result.Item || {})
   };
 }
 
 async function getPages(): Promise<APIGatewayProxyResult> {
-  const result = await docClient.send(new QueryCommand({
+  const result = await docClient.send(new ScanCommand({
     TableName: TABLE_NAME,
-    KeyConditionExpression: 'begins_with(PK, :pk) AND SK = :sk',
+    FilterExpression: 'begins_with(PK, :pk)',
     ExpressionAttributeValues: {
       ':pk': 'PAGE#',
-      ':sk': 'META#'
     }
   }));
 
   return {
     statusCode: 200,
-    body: JSON.stringify(result.Items)
+    body: JSON.stringify(result.Items || [])
   };
 }
 
@@ -90,7 +89,8 @@ async function createPage(event: APIGatewayProxyEvent): Promise<APIGatewayProxyR
   const page = {
     PK: `PAGE#${body.id}`,
     SK: 'META#',
-    ...body,
+    isPublished: body.isPublished ? 1 : 0,  // Convert boolean to number
+    title: body.title,
     createdAt: timestamp,
     updatedAt: timestamp,
     type: 'page'
@@ -128,7 +128,7 @@ async function updatePage(id: string, event: APIGatewayProxyEvent): Promise<APIG
 
   return {
     statusCode: 200,
-    body: JSON.stringify(result.Attributes)
+    body: JSON.stringify(result.Attributes || {})
   };
 }
 

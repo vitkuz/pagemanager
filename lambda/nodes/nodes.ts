@@ -47,7 +47,7 @@ async function getNodes(pageId: string): Promise<APIGatewayProxyResult> {
 
   return {
     statusCode: 200,
-    body: JSON.stringify(result.Items)
+    body: JSON.stringify(result.Items || [])
   };
 }
 
@@ -58,7 +58,12 @@ async function createNode(pageId: string, event: APIGatewayProxyEvent): Promise<
   const node = {
     PK: `PAGE#${pageId}`,
     SK: `NODE#${body.id}`,
-    ...body,
+    title: body.title,
+    description: body.description,
+    prompt: body.prompt,
+    generatedImages: body.generatedImages,
+    predictionId: body.predictionId,
+    predictionStatus: body.predictionStatus,
     pageId,
     createdAt: timestamp,
     updatedAt: timestamp,

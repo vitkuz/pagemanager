@@ -45,6 +45,7 @@ export class VitkuzAwsCdkPagemanagerStack extends cdk.Stack {
       layers: [layer],
       environment: {
         TABLE_NAME: table.tableName,
+        DEPLOY_TIME: `${Date.now()}`,
       },
       handler: 'pages.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '../dist/lambda/pages')),
@@ -56,6 +57,7 @@ export class VitkuzAwsCdkPagemanagerStack extends cdk.Stack {
       layers: [layer],
       environment: {
         TABLE_NAME: table.tableName,
+        DEPLOY_TIME: `${Date.now()}`,
       },
       handler: 'nodes.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '../dist/lambda/nodes')),
