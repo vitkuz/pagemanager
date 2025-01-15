@@ -138,6 +138,38 @@ async function updateNode(pageId: string, nodeId: string, event: APIGatewayProxy
   const body = JSON.parse(event.body || '{}');
   const timestamp = new Date().toISOString();
 
+  // Build update expression and values dynamically
+  let updateExpression = 'set updatedAt = :timestamp';
+  const expressionAttributeValues: Record<string, any> = {
+    ':timestamp': timestamp
+  };
+
+  // Add fields only if they are present in the request body
+  if (body.title !== undefined) {
+    updateExpression += ', title = :title';
+    expressionAttributeValues[':title'] = body.title;
+  }
+  if (body.description !== undefined) {
+    updateExpression += ', description = :description';
+    expressionAttributeValues[':description'] = body.description;
+  }
+  if (body.prompt !== undefined) {
+    updateExpression += ', prompt = :prompt';
+    expressionAttributeValues[':prompt'] = body.prompt;
+  }
+  if (body.generatedImages !== undefined) {
+    updateExpression += ', generatedImages = :generatedImages';
+    expressionAttributeValues[':generatedImages'] = body.generatedImages;
+  }
+  if (body.predictionId !== undefined) {
+    updateExpression += ', predictionId = :predictionId';
+    expressionAttributeValues[':predictionId'] = body.predictionId;
+  }
+  if (body.predictionStatus !== undefined) {
+    updateExpression += ', predictionStatus = :predictionStatus';
+    expressionAttributeValues[':predictionStatus'] = body.predictionStatus;
+  }
+
   // Check if node exists
   const nodeResult = await docClient.send(new GetCommand({
     TableName: TABLE_NAME,
@@ -161,16 +193,8 @@ async function updateNode(pageId: string, nodeId: string, event: APIGatewayProxy
       PK: `${KeyPrefix.PAGE}${pageId}`,
       SK: `${KeyPrefix.NODE}${nodeId}`
     },
-    UpdateExpression: 'set updatedAt = :timestamp, title = :title, description = :description, prompt = :prompt, generatedImages = :generatedImages, predictionId = :predictionId, predictionStatus = :predictionStatus',
-    ExpressionAttributeValues: {
-      ':timestamp': timestamp,
-      ':title': body.title,
-      ':description': body.description,
-      ':prompt': body.prompt,
-      ':generatedImages': body.generatedImages,
-      ':predictionId': body.predictionId,
-      ':predictionStatus': body.predictionStatus
-    },
+    UpdateExpression: updateExpression,
+    ExpressionAttributeValues: expressionAttributeValues,
     ReturnValues: 'ALL_NEW'
   }));
 
