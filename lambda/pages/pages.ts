@@ -94,14 +94,20 @@ async function createPage(event: APIGatewayProxyEvent): Promise<APIGatewayProxyR
   const body = JSON.parse(event.body || '{}');
   const timestamp = new Date().toISOString();
 
-  const page: Page = {
+  // Required fields that must be set
+  const requiredFields = {
     PK: `${KeyPrefix.PAGE}${body.id}`,
     SK: KeyPrefix.META,
-    isPublished: body.isPublished ? 1 : 0,  // Convert boolean to number
-    title: body.title,
     createdAt: timestamp,
     updatedAt: timestamp,
     type: EntityType.PAGE
+  };
+
+  // Merge body with required fields, ensuring required fields take precedence
+  const page = {
+    ...body,
+    ...requiredFields,
+    isPublished: body.isPublished ? 1 : 0 // Convert boolean to number
   };
 
   await docClient.send(new PutCommand({
@@ -120,18 +126,29 @@ async function updatePage(id: string, event: APIGatewayProxyEvent): Promise<APIG
   const body = JSON.parse(event.body || '{}');
   const timestamp = new Date().toISOString();
 
+  // Build update expression and values dynamically
+  let updateExpression = 'set updatedAt = :timestamp';
+  const expressionAttributeValues: Record<string, any> = {
+    ':timestamp': timestamp
+  };
+
+  // Add all fields from body except protected ones
+  const protectedFields = ['PK', 'SK', 'createdAt', 'type'];
+  Object.entries(body).forEach(([key, value]) => {
+    if (!protectedFields.includes(key)) {
+      updateExpression += `, ${key} = :${key}`;
+      expressionAttributeValues[`:${key}`] = key === 'isPublished' ? (value ? 1 : 0) : value;
+    }
+  });
+
   const result = await docClient.send(new UpdateCommand({
     TableName: TABLE_NAME,
     Key: {
       PK: `${KeyPrefix.PAGE}${id}`,
       SK: KeyPrefix.META
     },
-    UpdateExpression: 'set updatedAt = :timestamp, title = :title, isPublished = :isPublished',
-    ExpressionAttributeValues: {
-      ':timestamp': timestamp,
-      ':title': body.title,
-      ':isPublished': body.isPublished ? 1 : 0
-    },
+    UpdateExpression: updateExpression,
+    ExpressionAttributeValues: expressionAttributeValues,
     ReturnValues: 'ALL_NEW'
   }));
 

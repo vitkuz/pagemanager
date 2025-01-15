@@ -91,19 +91,20 @@ async function createNode(pageId: string, event: APIGatewayProxyEvent): Promise<
   const body = JSON.parse(event.body || '{}');
   const timestamp = new Date().toISOString();
 
-  const node: Node = {
+  // Required fields that must be set
+  const requiredFields = {
     PK: `${KeyPrefix.PAGE}${pageId}`,
     SK: `${KeyPrefix.NODE}${body.id}`,
-    title: body.title,
-    description: body.description,
-    prompt: body.prompt,
-    generatedImages: body.generatedImages,
-    predictionId: body.predictionId,
-    predictionStatus: body.predictionStatus,
-    pageId: pageId,
+    pageId,
     createdAt: timestamp,
     updatedAt: timestamp,
     type: EntityType.NODE
+  };
+
+  // Merge body with required fields, ensuring required fields take precedence
+  const node = {
+    ...body,
+    ...requiredFields
   };
 
   await docClient.send(new PutCommand({
@@ -138,37 +139,20 @@ async function updateNode(pageId: string, nodeId: string, event: APIGatewayProxy
   const body = JSON.parse(event.body || '{}');
   const timestamp = new Date().toISOString();
 
-  // Build update expression and values dynamically
+  // Start with updatedAt which is always required
   let updateExpression = 'set updatedAt = :timestamp';
   const expressionAttributeValues: Record<string, any> = {
     ':timestamp': timestamp
   };
 
-  // Add fields only if they are present in the request body
-  if (body.title !== undefined) {
-    updateExpression += ', title = :title';
-    expressionAttributeValues[':title'] = body.title;
-  }
-  if (body.description !== undefined) {
-    updateExpression += ', description = :description';
-    expressionAttributeValues[':description'] = body.description;
-  }
-  if (body.prompt !== undefined) {
-    updateExpression += ', prompt = :prompt';
-    expressionAttributeValues[':prompt'] = body.prompt;
-  }
-  if (body.generatedImages !== undefined) {
-    updateExpression += ', generatedImages = :generatedImages';
-    expressionAttributeValues[':generatedImages'] = body.generatedImages;
-  }
-  if (body.predictionId !== undefined) {
-    updateExpression += ', predictionId = :predictionId';
-    expressionAttributeValues[':predictionId'] = body.predictionId;
-  }
-  if (body.predictionStatus !== undefined) {
-    updateExpression += ', predictionStatus = :predictionStatus';
-    expressionAttributeValues[':predictionStatus'] = body.predictionStatus;
-  }
+  // Add all fields from body except protected ones
+  const protectedFields = ['PK', 'SK', 'createdAt', 'type', 'pageId'];
+  Object.entries(body).forEach(([key, value]) => {
+    if (!protectedFields.includes(key)) {
+      updateExpression += `, ${key} = :${key}`;
+      expressionAttributeValues[`:${key}`] = value;
+    }
+  });
 
   // Check if node exists
   const nodeResult = await docClient.send(new GetCommand({
