@@ -1,0 +1,43 @@
+# @name createPage
+POST https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/pages
+Content-Type: application/json
+
+{
+  "id": "test-page-2",
+  "title": "Test Page",
+  "isPublished": true
+}
+
+###
+
+# @name getAllPages
+GET https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/pages
+
+###
+
+# @name getPage
+GET https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/pages/test-page-1
+
+###
+
+# @name deletePage
+DELETE https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/pages/test-page-1
+
+###
+
+# Reference:
+# Stack outputs after deployment:
+# ApiUrl: https://xxxxx.execute-api.us-east-1.amazonaws.com/prod/
+# TableName: VitkuzAwsCdkPagemanagerStack-PageManagerTableXXXXX
+
+# API Endpoints:
+# Pages:
+# - GET    /pages
+# - POST   /pages
+# - GET    /pages/{id}
+# - PUT    /pages/{id}
+# - DELETE /pages/{id}
+
+# Nodes:
+# - GET    /pages/{id}/nodes
+# - POST   /pages/{id}/nodes
