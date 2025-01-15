@@ -1,6 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand, PutCommand, DeleteCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { EntityType, HttpMethod, KeyPrefix, Node } from '../types/common';
 
 const dynamodb = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamodb);
@@ -14,11 +15,18 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     switch (event.httpMethod) {
-      case 'GET':
+      case HttpMethod.GET:
         return await getNodes(pageId);
 
-      case 'POST':
+      case HttpMethod.POST:
         return await createNode(pageId, event);
+
+      case HttpMethod.DELETE:
+        const nodeId = event.pathParameters?.nodeId;
+        if (!nodeId) {
+          throw new Error('Missing node ID');
+        }
+        return await deleteNode(pageId, nodeId);
 
       default:
         return {
@@ -40,8 +48,8 @@ async function getNodes(pageId: string): Promise<APIGatewayProxyResult> {
     TableName: TABLE_NAME,
     KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
     ExpressionAttributeValues: {
-      ':pk': `PAGE#${pageId}`,
-      ':sk': 'NODE#'
+      ':pk': `${KeyPrefix.PAGE}${pageId}`,
+      ':sk': KeyPrefix.NODE
     }
   }));
 
@@ -52,22 +60,38 @@ async function getNodes(pageId: string): Promise<APIGatewayProxyResult> {
 }
 
 async function createNode(pageId: string, event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  // Check if page exists
+  const pageResult = await docClient.send(new GetCommand({
+    TableName: TABLE_NAME,
+    Key: {
+      PK: `${KeyPrefix.PAGE}${pageId}`,
+      SK: KeyPrefix.META
+    }
+  }));
+
+  if (!pageResult.Item) {
+    return {
+      statusCode: 404,
+      body: JSON.stringify({ message: 'Page not found' })
+    };
+  }
+
   const body = JSON.parse(event.body || '{}');
   const timestamp = new Date().toISOString();
 
-  const node = {
-    PK: `PAGE#${pageId}`,
-    SK: `NODE#${body.id}`,
+  const node: Node = {
+    PK: `${KeyPrefix.PAGE}${pageId}`,
+    SK: `${KeyPrefix.NODE}${body.id}`,
     title: body.title,
     description: body.description,
     prompt: body.prompt,
     generatedImages: body.generatedImages,
     predictionId: body.predictionId,
     predictionStatus: body.predictionStatus,
-    pageId,
+    pageId: pageId,
     createdAt: timestamp,
     updatedAt: timestamp,
-    type: 'node'
+    type: EntityType.NODE
   };
 
   await docClient.send(new PutCommand({
@@ -78,5 +102,20 @@ async function createNode(pageId: string, event: APIGatewayProxyEvent): Promise<
   return {
     statusCode: 201,
     body: JSON.stringify(node)
+  };
+}
+
+async function deleteNode(pageId: string, nodeId: string): Promise<APIGatewayProxyResult> {
+  await docClient.send(new DeleteCommand({
+    TableName: TABLE_NAME,
+    Key: {
+      PK: `${KeyPrefix.PAGE}${pageId}`,
+      SK: `${KeyPrefix.NODE}${nodeId}`
+    }
+  }));
+
+  return {
+    statusCode: 204,
+    body: ''
   };
 }

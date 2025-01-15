@@ -1,0 +1,36 @@
+# @name createNode
+POST https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/pages/test-page-1/nodes
+Content-Type: application/json
+
+{
+  "id": "test-node-2",
+  "title": "Test Node 2",
+  "description": "This is a test node description",
+  "prompt": "LILY, Test prompt for image generation",
+  "generatedImages": [
+    "https://example.com/image1.jpg",
+    "https://example.com/image2.jpg"
+  ],
+  "predictionId": "test-prediction-2",
+  "predictionStatus": "succeeded"
+}
+
+###
+
+# @name getNodes
+GET https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/pages/test-page-1/nodes
+
+# @name deleteNode
+DELETE https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/test-page-1/nodes/test-node-1
+
+###
+
+# Reference:
+# Stack outputs after deployment:
+# ApiUrl: https://xxxxx.execute-api.us-east-1.amazonaws.com/prod/
+# TableName: VitkuzAwsCdkPagemanagerStack-PageManagerTableXXXXX
+
+# API Endpoints for Nodes:
+# - GET    /pages/{id}/nodes    - Get all nodes for a page
+# - POST   /pages/{id}/nodes    - Create a new node for a page
+# - DELETE /pages/{id}/nodes/{nodeId} - Delete a specific node

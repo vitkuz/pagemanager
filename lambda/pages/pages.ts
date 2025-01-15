@@ -1,6 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand, DeleteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand, DeleteCommand, UpdateCommand, QueryCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { EntityType, HttpMethod, KeyPrefix, Page } from '../types/common';
 
 const dynamodb = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamodb);
@@ -9,22 +10,22 @@ const TABLE_NAME = process.env.TABLE_NAME!;
 export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   try {
     switch (event.httpMethod) {
-      case 'GET':
+      case HttpMethod.GET:
         if (event.pathParameters?.id) {
           return await getPage(event.pathParameters.id);
         }
         return await getPages();
 
-      case 'POST':
+      case HttpMethod.POST:
         return await createPage(event);
 
-      case 'PUT':
+      case HttpMethod.PUT:
         if (!event.pathParameters?.id) {
           throw new Error('Missing page ID');
         }
         return await updatePage(event.pathParameters.id, event);
 
-      case 'DELETE':
+      case HttpMethod.DELETE:
         if (!event.pathParameters?.id) {
           throw new Error('Missing page ID');
         }
@@ -49,8 +50,8 @@ async function getPage(id: string): Promise<APIGatewayProxyResult> {
   const result = await docClient.send(new GetCommand({
     TableName: TABLE_NAME,
     Key: {
-      PK: `PAGE#${id}`,
-      SK: 'META#'
+      PK: `${KeyPrefix.PAGE}${id}`,
+      SK: KeyPrefix.META
     }
   }));
 
@@ -70,9 +71,10 @@ async function getPage(id: string): Promise<APIGatewayProxyResult> {
 async function getPages(): Promise<APIGatewayProxyResult> {
   const result = await docClient.send(new ScanCommand({
     TableName: TABLE_NAME,
-    FilterExpression: 'begins_with(PK, :pk)',
+    FilterExpression: 'begins_with(PK, :pk) AND SK = :sk',
     ExpressionAttributeValues: {
-      ':pk': 'PAGE#',
+      ':pk': KeyPrefix.PAGE,
+      ':sk': KeyPrefix.META
     }
   }));
 
@@ -86,14 +88,14 @@ async function createPage(event: APIGatewayProxyEvent): Promise<APIGatewayProxyR
   const body = JSON.parse(event.body || '{}');
   const timestamp = new Date().toISOString();
 
-  const page = {
-    PK: `PAGE#${body.id}`,
-    SK: 'META#',
+  const page: Page = {
+    PK: `${KeyPrefix.PAGE}${body.id}`,
+    SK: KeyPrefix.META,
     isPublished: body.isPublished ? 1 : 0,  // Convert boolean to number
     title: body.title,
     createdAt: timestamp,
     updatedAt: timestamp,
-    type: 'page'
+    type: EntityType.PAGE
   };
 
   await docClient.send(new PutCommand({
@@ -114,8 +116,8 @@ async function updatePage(id: string, event: APIGatewayProxyEvent): Promise<APIG
   const result = await docClient.send(new UpdateCommand({
     TableName: TABLE_NAME,
     Key: {
-      PK: `PAGE#${id}`,
-      SK: 'META#'
+      PK: `${KeyPrefix.PAGE}${id}`,
+      SK: KeyPrefix.META
     },
     UpdateExpression: 'set updatedAt = :timestamp, title = :title, isPublished = :isPublished',
     ExpressionAttributeValues: {
@@ -133,11 +135,42 @@ async function updatePage(id: string, event: APIGatewayProxyEvent): Promise<APIG
 }
 
 async function deletePage(id: string): Promise<APIGatewayProxyResult> {
+  // First, get all nodes for this page
+  const nodesResult = await docClient.send(new QueryCommand({
+    TableName: TABLE_NAME,
+    KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+    ExpressionAttributeValues: {
+      ':pk': `${KeyPrefix.PAGE}${id}`,
+      ':sk': KeyPrefix.NODE
+    }
+  }));
+
+  // If there are nodes, delete them in batches
+  if (nodesResult.Items && nodesResult.Items.length > 0) {
+    // DynamoDB BatchWrite can only handle 25 items at a time
+    for (let i = 0; i < nodesResult.Items.length; i += 25) {
+      const batch = nodesResult.Items.slice(i, i + 25);
+      await docClient.send(new BatchWriteCommand({
+        RequestItems: {
+          [TABLE_NAME]: batch.map(item => ({
+            DeleteRequest: {
+              Key: {
+                PK: item.PK,
+                SK: item.SK
+              }
+            }
+          }))
+        }
+      }));
+    }
+  }
+
+  // Finally, delete the page itself
   await docClient.send(new DeleteCommand({
     TableName: TABLE_NAME,
     Key: {
-      PK: `PAGE#${id}`,
-      SK: 'META#'
+      PK: `${KeyPrefix.PAGE}${id}`,
+      SK: KeyPrefix.META
     }
   }));
 
