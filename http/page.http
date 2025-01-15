@@ -3,8 +3,8 @@ POST https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/pages
 Content-Type: application/json
 
 {
-  "id": "test-page-2",
-  "title": "Test Page 2",
+  "id": "test-page-1",
+  "title": "Test Page 1",
   "isPublished": false
 }
 
@@ -16,12 +16,12 @@ GET https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/pages
 ###
 
 # @name getPage
-GET https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/pages/test-page-1
+GET https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/pages/c42e7303-8102-4d4b-8cfa-a79c6c69b9e3
 
 ###
 
 # @name deletePage
-DELETE https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/pages/test-page-1
+DELETE https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/pages/c42e7303-8102-4d4b-8cfa-a79c6c69b9e3
 
 ###
 

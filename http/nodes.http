@@ -1,27 +1,29 @@
 # @name createNode
-POST https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/pages/test-page-1/nodes
+POST https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/pages/d06339a7-e391-4e28-ae60-367a41d5cc6b/nodes
 Content-Type: application/json
 
 {
-  "id": "test-node-2",
-  "title": "Test Node 2",
+  "id": "test-node-1",
+  "title": "Test Node 1",
   "description": "This is a test node description",
   "prompt": "LILY, Test prompt for image generation",
   "generatedImages": [
     "https://example.com/image1.jpg",
     "https://example.com/image2.jpg"
   ],
-  "predictionId": "test-prediction-2",
+  "predictionId": "test-prediction",
   "predictionStatus": "succeeded"
 }
 
 ###
 
 # @name getNodes
-GET https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/pages/test-page-1/nodes
+GET https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/pages/c42e7303-8102-4d4b-8cfa-a79c6c69b9e3/nodes
+
+###
 
 # @name deleteNode
-DELETE https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/test-page-1/nodes/test-node-1
+DELETE https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/pages/test-page-1/nodes/test-node-1
 
 ###
 
