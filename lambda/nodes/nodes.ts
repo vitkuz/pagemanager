@@ -1,5 +1,5 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, PutCommand, DeleteCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand, PutCommand, DeleteCommand, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { EntityType, HttpMethod, KeyPrefix, Node } from '../types/common';
 import { DEFAULT_HEADERS } from '../utils/headers';
@@ -28,6 +28,13 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
           throw new Error('Missing node ID');
         }
         return await deleteNode(pageId, nodeId, event);
+
+      case HttpMethod.PUT:
+        const updateNodeId = event.pathParameters?.nodeId;
+        if (!updateNodeId) {
+          throw new Error('Missing node ID');
+        }
+        return await updateNode(pageId, updateNodeId, event);
 
       default:
         return {
@@ -124,5 +131,52 @@ async function deleteNode(pageId: string, nodeId: string, event: APIGatewayProxy
     statusCode: 204,
     headers: DEFAULT_HEADERS(event.requestContext.requestId),
     body: ''
+  };
+}
+
+async function updateNode(pageId: string, nodeId: string, event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const body = JSON.parse(event.body || '{}');
+  const timestamp = new Date().toISOString();
+
+  // Check if node exists
+  const nodeResult = await docClient.send(new GetCommand({
+    TableName: TABLE_NAME,
+    Key: {
+      PK: `${KeyPrefix.PAGE}${pageId}`,
+      SK: `${KeyPrefix.NODE}${nodeId}`
+    }
+  }));
+
+  if (!nodeResult.Item) {
+    return {
+      statusCode: 404,
+      headers: DEFAULT_HEADERS(event.requestContext.requestId),
+      body: JSON.stringify({ message: 'Node not found' })
+    };
+  }
+
+  const result = await docClient.send(new UpdateCommand({
+    TableName: TABLE_NAME,
+    Key: {
+      PK: `${KeyPrefix.PAGE}${pageId}`,
+      SK: `${KeyPrefix.NODE}${nodeId}`
+    },
+    UpdateExpression: 'set updatedAt = :timestamp, title = :title, description = :description, prompt = :prompt, generatedImages = :generatedImages, predictionId = :predictionId, predictionStatus = :predictionStatus',
+    ExpressionAttributeValues: {
+      ':timestamp': timestamp,
+      ':title': body.title,
+      ':description': body.description,
+      ':prompt': body.prompt,
+      ':generatedImages': body.generatedImages,
+      ':predictionId': body.predictionId,
+      ':predictionStatus': body.predictionStatus
+    },
+    ReturnValues: 'ALL_NEW'
+  }));
+
+  return {
+    statusCode: 200,
+    headers: DEFAULT_HEADERS(event.requestContext.requestId),
+    body: JSON.stringify(result.Attributes || {})
   };
 }

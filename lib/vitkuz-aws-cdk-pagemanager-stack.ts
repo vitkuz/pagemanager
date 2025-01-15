@@ -94,6 +94,7 @@ export class VitkuzAwsCdkPagemanagerStack extends cdk.Stack {
 
     const node = nodes.addResource('{nodeId}');
     node.addMethod('DELETE', new apigateway.LambdaIntegration(nodesLambda));
+    node.addMethod('PUT', new apigateway.LambdaIntegration(nodesLambda));
 
     // Stack Outputs
     new cdk.CfnOutput(this, 'ApiUrl', {

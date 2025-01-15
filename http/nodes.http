@@ -27,6 +27,24 @@ DELETE https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/pages/test-pa
 
 ###
 
+# @name updateNode
+PUT {{$dotenv API_URL}}/pages/test-page-1/nodes/test-node-1
+Content-Type: application/json
+
+{
+  "title": "Updated Test Node",
+  "description": "This is an updated test node description",
+  "prompt": "LILY, Updated test prompt for image generation",
+  "generatedImages": [
+    "https://example.com/updated-image1.jpg",
+    "https://example.com/updated-image2.jpg"
+  ],
+  "predictionId": "test-prediction-2",
+  "predictionStatus": "succeeded"
+}
+
+###
+
 # Reference:
 # Stack outputs after deployment:
 # ApiUrl: https://xxxxx.execute-api.us-east-1.amazonaws.com/prod/
@@ -36,3 +54,4 @@ DELETE https://x211cstqci.execute-api.us-east-1.amazonaws.com/prod/pages/test-pa
 # - GET    /pages/{id}/nodes    - Get all nodes for a page
 # - POST   /pages/{id}/nodes    - Create a new node for a page
 # - DELETE /pages/{id}/nodes/{nodeId} - Delete a specific node
+# - PUT    /pages/{id}/nodes/{nodeId} - Update a specific node
