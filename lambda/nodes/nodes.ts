@@ -2,6 +2,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, PutCommand, DeleteCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { EntityType, HttpMethod, KeyPrefix, Node } from '../types/common';
+import { DEFAULT_HEADERS } from '../utils/headers';
 
 const dynamodb = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamodb);
@@ -16,7 +17,7 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     switch (event.httpMethod) {
       case HttpMethod.GET:
-        return await getNodes(pageId);
+        return await getNodes(pageId, event);
 
       case HttpMethod.POST:
         return await createNode(pageId, event);
@@ -26,11 +27,12 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
         if (!nodeId) {
           throw new Error('Missing node ID');
         }
-        return await deleteNode(pageId, nodeId);
+        return await deleteNode(pageId, nodeId, event);
 
       default:
         return {
           statusCode: 400,
+          headers: DEFAULT_HEADERS(event.requestContext.requestId),
           body: JSON.stringify({ message: 'Unsupported method' })
         };
     }
@@ -38,12 +40,13 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     console.error(error);
     return {
       statusCode: 500,
+      headers: DEFAULT_HEADERS(event.requestContext.requestId),
       body: JSON.stringify({ message: 'Internal server error' })
     };
   }
 }
 
-async function getNodes(pageId: string): Promise<APIGatewayProxyResult> {
+async function getNodes(pageId: string, event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   const result = await docClient.send(new QueryCommand({
     TableName: TABLE_NAME,
     KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
@@ -55,6 +58,7 @@ async function getNodes(pageId: string): Promise<APIGatewayProxyResult> {
 
   return {
     statusCode: 200,
+    headers: DEFAULT_HEADERS(event.requestContext.requestId),
     body: JSON.stringify(result.Items || [])
   };
 }
@@ -72,6 +76,7 @@ async function createNode(pageId: string, event: APIGatewayProxyEvent): Promise<
   if (!pageResult.Item) {
     return {
       statusCode: 404,
+      headers: DEFAULT_HEADERS(event.requestContext.requestId),
       body: JSON.stringify({ message: 'Page not found' })
     };
   }
@@ -101,11 +106,12 @@ async function createNode(pageId: string, event: APIGatewayProxyEvent): Promise<
 
   return {
     statusCode: 201,
+    headers: DEFAULT_HEADERS(event.requestContext.requestId),
     body: JSON.stringify(node)
   };
 }
 
-async function deleteNode(pageId: string, nodeId: string): Promise<APIGatewayProxyResult> {
+async function deleteNode(pageId: string, nodeId: string, event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   await docClient.send(new DeleteCommand({
     TableName: TABLE_NAME,
     Key: {
@@ -116,6 +122,7 @@ async function deleteNode(pageId: string, nodeId: string): Promise<APIGatewayPro
 
   return {
     statusCode: 204,
+    headers: DEFAULT_HEADERS(event.requestContext.requestId),
     body: ''
   };
 }

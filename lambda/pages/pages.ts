@@ -2,6 +2,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand, DeleteCommand, UpdateCommand, QueryCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { EntityType, HttpMethod, KeyPrefix, Page } from '../types/common';
+import { DEFAULT_HEADERS } from '../utils/headers';
 
 const dynamodb = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamodb);
@@ -12,9 +13,9 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     switch (event.httpMethod) {
       case HttpMethod.GET:
         if (event.pathParameters?.id) {
-          return await getPage(event.pathParameters.id);
+          return await getPage(event.pathParameters.id, event);
         }
-        return await getPages();
+        return await getPages(event);
 
       case HttpMethod.POST:
         return await createPage(event);
@@ -29,11 +30,12 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
         if (!event.pathParameters?.id) {
           throw new Error('Missing page ID');
         }
-        return await deletePage(event.pathParameters.id);
+        return await deletePage(event.pathParameters.id, event);
 
       default:
         return {
           statusCode: 400,
+          headers: DEFAULT_HEADERS(event.requestContext.requestId),
           body: JSON.stringify({ message: 'Unsupported method' })
         };
     }
@@ -41,12 +43,13 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     console.error(error);
     return {
       statusCode: 500,
+      headers: DEFAULT_HEADERS(event.requestContext.requestId),
       body: JSON.stringify({ message: 'Internal server error' })
     };
   }
 }
 
-async function getPage(id: string): Promise<APIGatewayProxyResult> {
+async function getPage(id: string, event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   const result = await docClient.send(new GetCommand({
     TableName: TABLE_NAME,
     Key: {
@@ -58,17 +61,19 @@ async function getPage(id: string): Promise<APIGatewayProxyResult> {
   if (!result.Item) {
     return {
       statusCode: 404,
+      headers: DEFAULT_HEADERS(event.requestContext.requestId),
       body: JSON.stringify({ message: 'Page not found' })
     };
   }
 
   return {
     statusCode: 200,
+    headers: DEFAULT_HEADERS(event.requestContext.requestId),
     body: JSON.stringify(result.Item || {})
   };
 }
 
-async function getPages(): Promise<APIGatewayProxyResult> {
+async function getPages(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   const result = await docClient.send(new ScanCommand({
     TableName: TABLE_NAME,
     FilterExpression: 'begins_with(PK, :pk) AND SK = :sk',
@@ -80,6 +85,7 @@ async function getPages(): Promise<APIGatewayProxyResult> {
 
   return {
     statusCode: 200,
+    headers: DEFAULT_HEADERS(event.requestContext.requestId),
     body: JSON.stringify(result.Items || [])
   };
 }
@@ -105,6 +111,7 @@ async function createPage(event: APIGatewayProxyEvent): Promise<APIGatewayProxyR
 
   return {
     statusCode: 201,
+    headers: DEFAULT_HEADERS(event.requestContext.requestId),
     body: JSON.stringify(page)
   };
 }
@@ -130,11 +137,12 @@ async function updatePage(id: string, event: APIGatewayProxyEvent): Promise<APIG
 
   return {
     statusCode: 200,
+    headers: DEFAULT_HEADERS(event.requestContext.requestId),
     body: JSON.stringify(result.Attributes || {})
   };
 }
 
-async function deletePage(id: string): Promise<APIGatewayProxyResult> {
+async function deletePage(id: string, event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   // First, get all nodes for this page
   const nodesResult = await docClient.send(new QueryCommand({
     TableName: TABLE_NAME,
@@ -176,6 +184,7 @@ async function deletePage(id: string): Promise<APIGatewayProxyResult> {
 
   return {
     statusCode: 204,
+    headers: DEFAULT_HEADERS(event.requestContext.requestId),
     body: ''
   };
 }
