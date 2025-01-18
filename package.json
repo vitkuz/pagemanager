@@ -9,7 +9,9 @@
     "watch": "tsc -w",
     "test": "jest",
     "cdk:synth": "cdk synth",
-    "cdk:deploy": "cdk deploy -y"
+    "cdk:all": "cdk deploy -y --all",
+    "cdk:VitkuzAwsCdkPagemanagerStack": "cdk deploy VitkuzAwsCdkPagemanagerStack -y",
+    "cdk:WebSocketStack": "cdk deploy WebSocketStack -y"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.147",
@@ -26,7 +28,9 @@
     "typescript": "~5.6.3"
   },
   "dependencies": {
+    "@aws-sdk/client-apigatewaymanagementapi": "^3.731.1",
     "@aws-sdk/client-dynamodb": "^3.726.1",
+    "@aws-sdk/client-s3": "^3.730.0",
     "@aws-sdk/client-ssm": "^3.525.0",
     "@aws-sdk/lib-dynamodb": "^3.726.1",
     "@aws-sdk/util-dynamodb": "^3.726.1",

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { VitkuzAwsCdkPagemanagerStack } from '../lib/vitkuz-aws-cdk-pagemanager-stack';
+import { WebSocketStack } from '../lib/websocket-stack';
 
 const app = new cdk.App();
 new VitkuzAwsCdkPagemanagerStack(app, 'VitkuzAwsCdkPagemanagerStack', {
@@ -17,4 +18,7 @@ new VitkuzAwsCdkPagemanagerStack(app, 'VitkuzAwsCdkPagemanagerStack', {
   env: { account: '582347504313', region: 'us-east-1' },
 
   /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */
+});
+new WebSocketStack(app, 'WebSocketStack', {
+  env: { account: '582347504313', region: 'us-east-1' },
 });

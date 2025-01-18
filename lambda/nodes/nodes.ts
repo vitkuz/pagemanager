@@ -9,6 +9,7 @@ const docClient = DynamoDBDocumentClient.from(dynamodb);
 const TABLE_NAME = process.env.TABLE_NAME!;
 
 export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  console.log(JSON.stringify(event, null ,2));
   try {
     const pageId = event.pathParameters?.id;
     if (!pageId) {
@@ -91,20 +92,14 @@ async function createNode(pageId: string, event: APIGatewayProxyEvent): Promise<
   const body = JSON.parse(event.body || '{}');
   const timestamp = new Date().toISOString();
 
-  // Required fields that must be set
-  const requiredFields = {
+  const node: Node = {
+    ...body,
     PK: `${KeyPrefix.PAGE}${pageId}`,
     SK: `${KeyPrefix.NODE}${body.id}`,
-    pageId,
+    pageId: pageId,
     createdAt: timestamp,
     updatedAt: timestamp,
     type: EntityType.NODE
-  };
-
-  // Merge body with required fields, ensuring required fields take precedence
-  const node = {
-    ...body,
-    ...requiredFields
   };
 
   await docClient.send(new PutCommand({
@@ -140,16 +135,21 @@ async function updateNode(pageId: string, nodeId: string, event: APIGatewayProxy
   const timestamp = new Date().toISOString();
 
   // Start with updatedAt which is always required
-  let updateExpression = 'set updatedAt = :timestamp';
+  let updateExpression = 'set #updatedAt = :timestamp';
   const expressionAttributeValues: Record<string, any> = {
-    ':timestamp': timestamp
+    ':timestamp': timestamp,
+  };
+  const expressionAttributeNames: Record<string, string> = {
+    '#updatedAt': 'updatedAt', // Handle reserved keyword
   };
 
   // Add all fields from body except protected ones
-  const protectedFields = ['PK', 'SK', 'createdAt', 'type', 'pageId'];
+  const protectedFields = ['PK', 'SK', 'createdAt', 'type', 'pageId', 'updatedAt'];
   Object.entries(body).forEach(([key, value]) => {
     if (!protectedFields.includes(key)) {
-      updateExpression += `, ${key} = :${key}`;
+      const placeholder = key === 'time' ? '#time' : `#${key}`;
+      updateExpression += `, ${placeholder} = :${key}`;
+      expressionAttributeNames[placeholder] = key;
       expressionAttributeValues[`:${key}`] = value;
     }
   });
@@ -159,15 +159,15 @@ async function updateNode(pageId: string, nodeId: string, event: APIGatewayProxy
     TableName: TABLE_NAME,
     Key: {
       PK: `${KeyPrefix.PAGE}${pageId}`,
-      SK: `${KeyPrefix.NODE}${nodeId}`
-    }
+      SK: `${KeyPrefix.NODE}${nodeId}`,
+    },
   }));
 
   if (!nodeResult.Item) {
     return {
       statusCode: 404,
       headers: DEFAULT_HEADERS(event.requestContext.requestId),
-      body: JSON.stringify({ message: 'Node not found' })
+      body: JSON.stringify({ message: 'Node not found' }),
     };
   }
 
@@ -175,16 +175,17 @@ async function updateNode(pageId: string, nodeId: string, event: APIGatewayProxy
     TableName: TABLE_NAME,
     Key: {
       PK: `${KeyPrefix.PAGE}${pageId}`,
-      SK: `${KeyPrefix.NODE}${nodeId}`
+      SK: `${KeyPrefix.NODE}${nodeId}`,
     },
     UpdateExpression: updateExpression,
+    ExpressionAttributeNames: expressionAttributeNames,
     ExpressionAttributeValues: expressionAttributeValues,
-    ReturnValues: 'ALL_NEW'
+    ReturnValues: 'ALL_NEW',
   }));
 
   return {
     statusCode: 200,
     headers: DEFAULT_HEADERS(event.requestContext.requestId),
-    body: JSON.stringify(result.Attributes || {})
+    body: JSON.stringify(result.Attributes || {}),
   };
 }
