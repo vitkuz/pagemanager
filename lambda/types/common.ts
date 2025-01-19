@@ -38,6 +38,7 @@ export interface Page extends BaseItem {
 }
 
 export interface Node extends BaseItem {
+    id: string;
     title: string;
     description: string;
     prompt: string;
