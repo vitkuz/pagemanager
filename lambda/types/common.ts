@@ -3,8 +3,9 @@ export enum EntityType {
     NODE = 'node'
 }
 
-export enum PredictionStatus {
-    PENDING = 'pending',
+export enum TaskStatus {
+    STARTING = 'starting',
+    PROCESSING = 'processing',
     SUCCEEDED = 'succeeded',
     FAILED = 'failed'
 }
@@ -41,6 +42,6 @@ export interface Node extends BaseItem {
     prompt: string;
     generatedImages: string[];
     predictionId: string;
-    predictionStatus: PredictionStatus;
+    predictionStatus: TaskStatus;
     pageId: string;
 }

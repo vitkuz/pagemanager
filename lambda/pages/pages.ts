@@ -1,12 +1,100 @@
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand, DeleteCommand, UpdateCommand, QueryCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { EntityType, HttpMethod, KeyPrefix, Page } from '../types/common';
-import { DEFAULT_HEADERS } from '../utils/headers';
+import { getEnvVars } from '../utils/env';
+import { getPageById, getAllPages, createNewPage } from '../utils/dynamodb';
+import { createResponse, createErrorResponse } from '../utils/response';
+import { validatePage } from '../utils/validation';
 
-const dynamodb = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamodb);
-const TABLE_NAME = process.env.TABLE_NAME!;
+const env = getEnvVars();
+
+const createPageData = (body: any): Page => {
+  const timestamp = new Date().toISOString();
+  return {
+    ...body,
+    PK: `${KeyPrefix.PAGE}${body.id}`,
+    SK: KeyPrefix.META,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    type: EntityType.PAGE,
+    isPublished: body.isPublished ? 1 : 0
+  };
+};
+
+async function createPage(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  try {
+    const body = JSON.parse(event.body || '{}');
+
+    // Validate required fields
+    const validationErrors = validatePage(body);
+    if (validationErrors.length > 0) {
+      return createErrorResponse(
+          400,
+          'Validation failed',
+          event.requestContext.requestId,
+          { errors: validationErrors }
+      );
+    }
+
+    // Check if ID is provided
+    if (!body.id?.trim()) {
+      return createErrorResponse(
+          400,
+          'Page ID is required',
+          event.requestContext.requestId
+      );
+    }
+
+    // Check if page with this ID already exists
+    const existingPage = await getPageById(env.TABLE_NAME, body.id);
+    if (existingPage) {
+      return createErrorResponse(
+          409,
+          'Page with this ID already exists',
+          event.requestContext.requestId
+      );
+    }
+
+    const pageData = createPageData(body);
+    const newPage = await createNewPage(env.TABLE_NAME, pageData);
+
+    return createResponse(
+        201,
+        newPage,
+        event.requestContext.requestId,
+        { message: 'Page created successfully' }
+    );
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return createErrorResponse(
+          400,
+          'Invalid JSON in request body',
+          event.requestContext.requestId
+      );
+    }
+    throw error;
+  }
+}
+
+async function getPage(id: string, event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const page = await getPageById(env.TABLE_NAME, id);
+
+  if (!page) {
+    return createErrorResponse(404, 'Page not found', event.requestContext.requestId);
+  }
+
+  return createResponse(200, page, event.requestContext.requestId);
+}
+
+async function getPages(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const pages = await getAllPages(env.TABLE_NAME);
+
+  return createResponse(
+      200,
+      pages,
+      event.requestContext.requestId,
+      { count: pages.length }
+  );
+}
 
 export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   try {
@@ -33,175 +121,10 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
         return await deletePage(event.pathParameters.id, event);
 
       default:
-        return {
-          statusCode: 400,
-          headers: DEFAULT_HEADERS(event.requestContext.requestId),
-          body: JSON.stringify({ message: 'Unsupported method' })
-        };
+        return createErrorResponse(400, 'Unsupported method', event.requestContext.requestId);
     }
   } catch (error) {
     console.error(error);
-    return {
-      statusCode: 500,
-      headers: DEFAULT_HEADERS(event.requestContext.requestId),
-      body: JSON.stringify({ message: 'Internal server error' })
-    };
+    return createErrorResponse(500, 'Internal server error', event.requestContext.requestId);
   }
-}
-
-async function getPage(id: string, event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
-  const result = await docClient.send(new GetCommand({
-    TableName: TABLE_NAME,
-    Key: {
-      PK: `${KeyPrefix.PAGE}${id}`,
-      SK: KeyPrefix.META
-    }
-  }));
-
-  if (!result.Item) {
-    return {
-      statusCode: 404,
-      headers: DEFAULT_HEADERS(event.requestContext.requestId),
-      body: JSON.stringify({ message: 'Page not found' })
-    };
-  }
-
-  return {
-    statusCode: 200,
-    headers: DEFAULT_HEADERS(event.requestContext.requestId),
-    body: JSON.stringify(result.Item || {})
-  };
-}
-
-async function getPages(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
-  const result = await docClient.send(new ScanCommand({
-    TableName: TABLE_NAME,
-    FilterExpression: 'begins_with(PK, :pk) AND SK = :sk',
-    ExpressionAttributeValues: {
-      ':pk': KeyPrefix.PAGE,
-      ':sk': KeyPrefix.META
-    }
-  }));
-
-  return {
-    statusCode: 200,
-    headers: DEFAULT_HEADERS(event.requestContext.requestId),
-    body: JSON.stringify(result.Items || [])
-  };
-}
-
-async function createPage(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
-  const body = JSON.parse(event.body || '{}');
-  const timestamp = new Date().toISOString();
-
-  // Required fields that must be set
-  const requiredFields = {
-    PK: `${KeyPrefix.PAGE}${body.id}`,
-    SK: KeyPrefix.META,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    type: EntityType.PAGE
-  };
-
-  // Merge body with required fields, ensuring required fields take precedence
-  const page = {
-    ...body,
-    ...requiredFields,
-    isPublished: body.isPublished ? 1 : 0 // Convert boolean to number
-  };
-
-  await docClient.send(new PutCommand({
-    TableName: TABLE_NAME,
-    Item: page
-  }));
-
-  return {
-    statusCode: 201,
-    headers: DEFAULT_HEADERS(event.requestContext.requestId),
-    body: JSON.stringify(page)
-  };
-}
-
-async function updatePage(id: string, event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
-  const body = JSON.parse(event.body || '{}');
-  const timestamp = new Date().toISOString();
-
-  // Build update expression and values dynamically
-  let updateExpression = 'set updatedAt = :timestamp';
-  const expressionAttributeValues: Record<string, any> = {
-    ':timestamp': timestamp
-  };
-
-  // Add all fields from body except protected ones
-  const protectedFields = ['PK', 'SK', 'createdAt', 'type'];
-  Object.entries(body).forEach(([key, value]) => {
-    if (!protectedFields.includes(key)) {
-      updateExpression += `, ${key} = :${key}`;
-      expressionAttributeValues[`:${key}`] = key === 'isPublished' ? (value ? 1 : 0) : value;
-    }
-  });
-
-  const result = await docClient.send(new UpdateCommand({
-    TableName: TABLE_NAME,
-    Key: {
-      PK: `${KeyPrefix.PAGE}${id}`,
-      SK: KeyPrefix.META
-    },
-    UpdateExpression: updateExpression,
-    ExpressionAttributeValues: expressionAttributeValues,
-    ReturnValues: 'ALL_NEW'
-  }));
-
-  return {
-    statusCode: 200,
-    headers: DEFAULT_HEADERS(event.requestContext.requestId),
-    body: JSON.stringify(result.Attributes || {})
-  };
-}
-
-async function deletePage(id: string, event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
-  // First, get all nodes for this page
-  const nodesResult = await docClient.send(new QueryCommand({
-    TableName: TABLE_NAME,
-    KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
-    ExpressionAttributeValues: {
-      ':pk': `${KeyPrefix.PAGE}${id}`,
-      ':sk': KeyPrefix.NODE
-    }
-  }));
-
-  // If there are nodes, delete them in batches
-  if (nodesResult.Items && nodesResult.Items.length > 0) {
-    // DynamoDB BatchWrite can only handle 25 items at a time
-    for (let i = 0; i < nodesResult.Items.length; i += 25) {
-      const batch = nodesResult.Items.slice(i, i + 25);
-      await docClient.send(new BatchWriteCommand({
-        RequestItems: {
-          [TABLE_NAME]: batch.map(item => ({
-            DeleteRequest: {
-              Key: {
-                PK: item.PK,
-                SK: item.SK
-              }
-            }
-          }))
-        }
-      }));
-    }
-  }
-
-  // Finally, delete the page itself
-  await docClient.send(new DeleteCommand({
-    TableName: TABLE_NAME,
-    Key: {
-      PK: `${KeyPrefix.PAGE}${id}`,
-      SK: KeyPrefix.META
-    }
-  }));
-
-  return {
-    statusCode: 204,
-    headers: DEFAULT_HEADERS(event.requestContext.requestId),
-    body: ''
-  };
 }
