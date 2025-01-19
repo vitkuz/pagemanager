@@ -32,6 +32,7 @@ export interface BaseItem {
 }
 
 export interface Page extends BaseItem {
+    id: string;
     title: string;
     isPublished: number;
 }
